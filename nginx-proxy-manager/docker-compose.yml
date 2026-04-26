@@ -1,6 +1,6 @@
 services:
   app:
-    image: "jc21/nginx-proxy-manager:latest"
+    image: "jc21/nginx-proxy-manager:2.14.0"
     restart: unless-stopped
     ports:
       - "80:80"
@@ -9,6 +9,22 @@ services:
     volumes:
       - npm-data:/data
       - npm-letsencrypt:/etc/letsencrypt
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:81/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
 
 volumes:
   npm-letsencrypt:

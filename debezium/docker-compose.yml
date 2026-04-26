@@ -3,28 +3,69 @@ services:
     image: quay.io/debezium/zookeeper:3.0
   kafka:
     image: quay.io/debezium/kafka:3.0
+    restart: unless-stopped
     ports:
       - 9092:9092
     links:
       - zookeeper
     environment:
       - ZOOKEEPER_CONNECT=zookeeper:2181
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "9092"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - app-network
   mysql:
     image: quay.io/debezium/example-mysql:3.0
-    environment:
-      - MYSQL_ROOT_PASSWORD=debezium
-      - MYSQL_USER=mysqluser
-      - MYSQL_PASSWORD=mysqlpw
+    restart: unless-stopped
+    env_file: ./.env
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - app-network
   kafka-connect:
     image: quay.io/debezium/connect:3.0
+    restart: unless-stopped
     ports:
       - 8083:8083
     links:
       - kafka
       - mysql
+    env_file: ./.env
     environment:
       - BOOTSTRAP_SERVERS=kafka:9092
       - GROUP_ID=1
       - CONFIG_STORAGE_TOPIC=my_connect_configs
       - OFFSET_STORAGE_TOPIC=my_connect_offsets
       - STATUS_STORAGE_TOPIC=my_connect_status
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/connectors || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge

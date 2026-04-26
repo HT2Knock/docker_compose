@@ -2,5 +2,22 @@ services:
   mongodb-community-server:
     container_name: mongodb
     image: "mongodb/mongodb-community-server:8.0.3-ubuntu2204"
+    restart: unless-stopped
     ports:
       - "27017:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
