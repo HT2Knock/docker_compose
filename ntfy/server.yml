@@ -1,0 +1,24 @@
+# ntfy server for the lab machine.
+# TLS is terminated by `tailscale serve`, so this process speaks plain HTTP
+# on 127.0.0.1:2586 and trusts the forwarded headers.
+
+base-url: "https://t2knock-lab.turkey-alhena.ts.net:8443"
+listen-http: ":80"
+behind-proxy: true
+
+# Keep messages so the iPhone can fetch one after a push wakes it up.
+cache-file: "/var/cache/ntfy/cache.db"
+cache-duration: "48h"
+
+# Private instance: anonymous access is denied, users come from NTFY_AUTH_USERS.
+auth-file: "/var/lib/ntfy/user.db"
+auth-default-access: "deny-all"
+enable-signup: false
+
+# iOS cannot hold a socket open, so instant push needs an APNs-connected
+# upstream. ntfy.sh forwards the poll request (message ID only, no body).
+upstream-base-url: "https://ntfy.sh"
+# upstream-access-token: "tk_..."   # only if ntfy.sh rate limits you
+
+keepalive-interval: "45s"
+manager-interval: "1m"
