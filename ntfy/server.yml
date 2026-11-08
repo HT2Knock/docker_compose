@@ -2,7 +2,7 @@
 # TLS is terminated by `tailscale serve`, so this process speaks plain HTTP
 # on 127.0.0.1:2586 and trusts the forwarded headers.
 
-base-url: "https://t2knock-lab.turkey-alhena.ts.net:8443"
+# Public URL comes from NTFY_BASE_URL in .env, so this file stays generic.
 listen-http: ":80"
 behind-proxy: true
 

@@ -1,14 +1,13 @@
 # ntfy
 
-Self-hosted push server. Built for an iPhone 7 Plus on iOS 15.8.8, which is
-the newest iOS that phone can run.
+Self-hosted ntfy server, served over Tailscale Funnel so clients need no VPN.
 
-- Server: `https://t2knock-lab.turkey-alhena.ts.net:8443` (tailnet only)
+- Server: `https://ntfy.example.com` (public, Funnel)
 - Local bind: `127.0.0.1:2586`
-- Client: official ntfy app, App Store, requires iOS 15.0 or later
+- Client: official ntfy app, iOS 15 or later
 
-TLS comes from `tailscale serve`. Port 443 on the lab already serves Grafana,
-so ntfy takes 8443.
+TLS comes from `tailscale serve`. Use a dedicated HTTPS port when another
+service already owns 443.
 
 ## 1. Start
 
@@ -31,16 +30,35 @@ python3 -c "import bcrypt;print(bcrypt.hashpw(b'YOURPASSWORD', bcrypt.gensalt(10
 docker run --rm binwiederhier/ntfy:v2.37.2 token generate
 ```
 
-`NTFY_AUTH_USERS` is `user:hash:role`, `NTFY_AUTH_TOKENS` is `user:token:label`.
+`NTFY_AUTH_USERS` is `user:hash:role`. `NTFY_AUTH_TOKENS` is
+`user:token:label`.
 
-## 2. Publish over the tailnet
+## 2. Publish to the internet with Funnel
 
-```bash
-sudo tailscale serve --bg --https=8443 http://127.0.0.1:2586
-tailscale serve status
+Funnel needs the `funnel` node attribute in the tailnet policy:
+
+```json
+"nodeAttrs": [
+  { "target": ["<node-name>"], "attr": ["funnel"] }
+]
 ```
 
-This adds a port. It does not touch the 443 rule that serves Grafana.
+Then start the listener:
+
+```bash
+sudo tailscale funnel --bg --https=8443 http://127.0.0.1:2586
+tailscale funnel status
+```
+
+Funnel allows only ports 443, 8443, and 10000. This does not change any other
+port rule on the node.
+
+To go back to tailnet-only:
+
+```bash
+sudo tailscale funnel --https=8443 off
+sudo tailscale serve --bg --https=8443 http://127.0.0.1:2586
+```
 
 ## 3. Send and read
 
@@ -48,39 +66,56 @@ This adds a port. It does not touch the 443 rule that serves Grafana.
 TOKEN=$(grep NTFY_AUTH_TOKENS .env | cut -d"'" -f2 | cut -d: -f2)
 curl -H "Authorization: Bearer $TOKEN" \
      -d "hello from the lab" \
-     https://t2knock-lab.turkey-alhena.ts.net:8443/lab
+     https://ntfy.example.com/lab
 
-curl -u ht2knock:YOURPASSWORD \
-     "https://t2knock-lab.turkey-alhena.ts.net:8443/lab/json?poll=1"
+curl -u admin:YOURPASSWORD \
+     "https://ntfy.example.com/lab/json?poll=1"
 ```
 
-## 4. Subscribe on the iPhone
-
-1. Install ntfy from the App Store.
-2. Settings, set the server to `https://t2knock-lab.turkey-alhena.ts.net:8443`.
-3. Sign in as `ht2knock`.
-4. Subscribe to `lab`.
-
-Tailscale must be on for the phone to load the message body. With Tailscale
-off the push still arrives, but shows only "New message".
-
-## 5. Public access (optional)
+For a title, priority, or tags, publish JSON. It also keeps non-ASCII text
+safe, which HTTP headers may not:
 
 ```bash
-sudo tailscale funnel --bg --https=8443 http://127.0.0.1:2586
+curl -H "Authorization: Bearer $TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"topic":"lab","title":"Build done","message":"Deploy finished","priority":4,"tags":["rocket"]}' \
+     https://ntfy.example.com/
 ```
 
-Funnel needs the `funnel` node attribute in the tailnet policy. The login page
-then faces the internet, but `auth-default-access: deny-all` keeps topics shut.
+## 4. Subscribe on a phone
+
+1. Install ntfy from the App Store.
+2. Settings, set the default server to `https://ntfy.example.com`.
+3. Settings, Users, Add user: same URL, username, and password.
+4. Add a topic, for example `lab`.
+
+No VPN is needed. The phone uses the public Funnel URL for the wake-up push
+and for the message body.
+
+## 5. Security
+
+Funnel puts the login page and the API on the public internet.
+
+- `auth-default-access: deny-all` blocks every topic without a login.
+- `enable-signup: false` blocks account creation.
+- ntfy has no login rate limit, so use a long random admin password.
+- Publish with the `tk_...` token, not the password.
+- The host name appears in certificate transparency logs. Expect scanner
+  traffic.
+
+Do not commit the real host name, user name, or any token to this repository.
+Keep them in `.env`, and keep `.env` ignored.
 
 ## Notes
 
 - `upstream-base-url` sends only a message ID and a topic hash to ntfy.sh.
-  Message bodies stay on the lab. This is what makes iOS push instant; without
-  it delivery can take 20 minutes to hours.
+  Message bodies stay on the server. This is what makes iOS push instant;
+  without it delivery can take 20 minutes to hours.
 - If ntfy.sh rate limits the poll requests, set `upstream-access-token` in
   `server.yml`.
 - Messages are cached 48 hours, so a phone that was offline can still fetch.
-- The iPhone 7 Plus stops at iOS 15. If a future ntfy release raises its
-  minimum, the installed app keeps working but stops updating. Keep a second
-  channel, for example a Telegram bot, for alerts that matter.
+- Funnel traffic is relayed through Tailscale ingress, not peer-to-peer. The
+  bandwidth is enough for notifications.
+- A phone that stops at an old iOS release keeps a working app but gets no
+  updates. Keep a second channel, for example a Telegram bot, for alerts that
+  matter.

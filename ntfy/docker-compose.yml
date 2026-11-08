@@ -10,6 +10,7 @@ services:
     environment:
       TZ: Asia/Ho_Chi_Minh
       # Provisioned from config, not the CLI. Values live in .env (not committed).
+      NTFY_BASE_URL: ${NTFY_BASE_URL:?set in .env}
       NTFY_AUTH_USERS: ${NTFY_AUTH_USERS:?set in .env}
       NTFY_AUTH_TOKENS: ${NTFY_AUTH_TOKENS:-}
     volumes:
